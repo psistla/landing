@@ -517,4 +517,146 @@ class FabricInventoryCollector:
         
         try:
             # Get the lakehouse path if not provided
-     
+            if not lakehouse_path:
+                lakehouse_id = fabric.get_lakehouse_id()
+                workspace_id = fabric.get_workspace_id()
+                lakehouse_path = f"abfss://workspace@onelake.dfs.fabric.microsoft.com/{workspace_id}/{lakehouse_id}/Tables"
+            
+            # Save each DataFrame as a Delta table
+            for table_name, df in inventory.items():
+                if not df.empty:
+                    table_path = f"{lakehouse_path}/fabric_inventory_{table_name}"
+                    
+                    # Convert to Spark DataFrame and save
+                    spark_df = spark.createDataFrame(df)
+                    spark_df.write \
+                        .mode("overwrite") \
+                        .option("overwriteSchema", "true") \
+                        .format("delta") \
+                        .save(table_path)
+                    
+                    print(f"  ✓ Saved {table_name} ({len(df)} rows) to Delta table")
+                    
+        except Exception as e:
+            print(f"  ✗ Error saving to lakehouse: {str(e)}")
+            print("  ℹ Inventory data is still available in memory")
+    
+    def display_summary(self, inventory: Dict[str, pd.DataFrame]) -> None:
+        """
+        Display inventory summary
+        
+        Args:
+            inventory: Dictionary of inventory DataFrames
+        """
+        print("\n📊 INVENTORY SUMMARY")
+        print("="*60)
+        
+        for name, df in inventory.items():
+            if not df.empty:
+                print(f"\n{name.upper()}:")
+                print(f"  • Records: {len(df)}")
+                if 'Type' in df.columns:
+                    print(f"  • Types: {', '.join(df['Type'].unique())}")
+                
+                # Show first few columns as sample
+                if len(df.columns) > 0:
+                    sample_cols = list(df.columns[:5])
+                    print(f"  • Key columns: {', '.join(sample_cols)}")
+        
+        print("\n" + "="*60)
+
+# ============================================================================
+# SECTION 4: MAIN EXECUTION FUNCTION
+# ============================================================================
+
+def run_fabric_inventory(
+    workspace_name: str,
+    auth_method: str = "managed_identity",
+    save_to_delta: bool = True,
+    **auth_params
+) -> Dict[str, pd.DataFrame]:
+    """
+    Main function to run the Fabric inventory collection
+    
+    Args:
+        workspace_name: Name of the Fabric workspace to inventory
+        auth_method: Authentication method ('managed_identity' or 'service_principal')
+        save_to_delta: Whether to save results to Delta tables
+        **auth_params: Additional authentication parameters
+        
+    Returns:
+        Dictionary containing all inventory DataFrames
+    """
+    
+    # Setup authentication
+    authenticator = FabricAuthenticator(auth_method)
+    
+    if auth_method == "managed_identity":
+        authenticator.setup_managed_identity(
+            client_id=auth_params.get('client_id')
+        )
+    elif auth_method == "service_principal":
+        authenticator.setup_service_principal_cert(
+            tenant_id=auth_params.get('tenant_id'),
+            client_id=auth_params.get('client_id'),
+            cert_path=auth_params.get('cert_path')
+        )
+    
+    # Create inventory collector
+    collector = FabricInventoryCollector(
+        workspace_name=workspace_name,
+        auth_provider=authenticator
+    )
+    
+    # Generate inventory
+    inventory = collector.generate_inventory()
+    
+    # Save to Delta tables if requested
+    if save_to_delta:
+        collector.save_to_lakehouse(inventory)
+    
+    # Display summary
+    collector.display_summary(inventory)
+    
+    return inventory
+
+# ============================================================================
+# SECTION 5: USAGE EXAMPLES
+# ============================================================================
+
+# Example 1: Using Managed Identity (Recommended for Fabric environment)
+# This uses the workspace's managed identity automatically
+inventory = run_fabric_inventory(
+    workspace_name="YOUR_WORKSPACE_NAME",
+    auth_method="managed_identity",
+    save_to_delta=True
+)
+
+# Example 2: Using Service Principal with Certificate (No secrets)
+# inventory = run_fabric_inventory(
+#     workspace_name="YOUR_WORKSPACE_NAME",
+#     auth_method="service_principal",
+#     tenant_id="your-tenant-id",
+#     client_id="your-service-principal-id",
+#     cert_path="/path/to/certificate.pem",
+#     save_to_delta=True
+# )
+
+# Example 3: Access specific inventory data
+# all_items = inventory['all_items']
+# semantic_models = inventory['semantic_models']
+# reports = inventory['reports']
+
+# Display sample of semantic models
+if not inventory['semantic_models'].empty:
+    print("\n📊 Sample Semantic Models:")
+    display(inventory['semantic_models'].head())
+
+# Display sample of all items
+if not inventory['all_items'].empty:
+    print("\n📦 Sample Items:")
+    display(inventory['all_items'].head())
+
+print("\n✅ Inventory collection complete!")
+print("📝 Data is now available in the 'inventory' dictionary")
+print("🔍 Use inventory['table_name'] to access specific data")
