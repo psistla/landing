@@ -1,14 +1,3 @@
-I'll search for the latest information on metadata-driven frameworks with medallion architecture in Microsoft Fabric to provide you with current, verified guidance.
-
-Searched for “Microsoft Fabric metadata-driven framework medallion architecture 2025”
-
-Searched for “metadata-driven pipeline framework implementation best practices 2025”
-
-Searched for “Microsoft Fabric medallion architecture pitfalls challenges failures”
-
-Searched for “metadata-driven framework success rate failure rate data pipeline implementation”
-
-Now let me compile a comprehensive response based on the latest information I've gathered.
 
 ---
 
