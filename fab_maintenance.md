@@ -224,6 +224,18 @@ def run_maintenance():
 # Execute
 summary = run_maintenance()
 ```
+---
+```
+# Step 1: Dry run to validate
+CONFIG["dry_run"] = True
+run_maintenance()
+
+# Step 2: Review output, verify tables discovered correctly
+
+# Step 3: Production run
+CONFIG["dry_run"] = False
+run_maintenance()
+```
 
 ---
 
